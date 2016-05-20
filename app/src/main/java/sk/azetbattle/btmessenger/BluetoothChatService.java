@@ -48,7 +48,7 @@ import java.util.UUID;
 public class BluetoothChatService extends Service {
     // Debugging
     private static final String TAG = "BluetoothChatService";
-
+    private BluetoothChatService thisService;
 
     // Binder given to clients
     private final IBinder mBinder = new LocalBinder();
@@ -92,6 +92,7 @@ public class BluetoothChatService extends Service {
     public BluetoothChatService() {
         mAdapter = BluetoothAdapter.getDefaultAdapter();
         mState = STATE_NONE;
+        thisService = this;
     }
 
     /**
@@ -139,7 +140,7 @@ public class BluetoothChatService extends Service {
             mConnectedThread = null;
         }
 
-       // setState(STATE_LISTEN);
+
 
         // Start the thread to listen on a BluetoothServerSocket
         if (mSecureAcceptThread == null) {
@@ -332,7 +333,7 @@ public class BluetoothChatService extends Service {
 
     @Override
     public IBinder onBind(Intent intent) {
-        return mBinder;
+        return messenger.getBinder();
     }
 
     /**
@@ -591,10 +592,13 @@ public class BluetoothChatService extends Service {
                 Toast.makeText(getApplication(), bundle.getString("rec"), Toast.LENGTH_LONG).show();//message received
 
                 replyMessanger = msg.replyTo; //init reply messenger
-                msg.obj = this;
-                msg.what = Constants.INITMESSAGE;
+
+                setState(STATE_LISTEN);
+                Message message = new Message();
+                message.obj = thisService;
+                message.what = Constants.INITMESSAGE;
                 try {
-                    replyMessanger.send(msg);
+                    replyMessanger.send(message);
                 } catch (RemoteException e) {
                     e.printStackTrace();
                 }
