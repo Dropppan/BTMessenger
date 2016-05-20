@@ -15,16 +15,14 @@
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:background="@drawable/buttton_receiver"
     android:layout_marginBottom="10dp"
     android:layout_marginTop="10dp"
-    android:background="@drawable/button"
     >
 
     <TextView
         android:id="@+id/name_tw"
         android:text="name"
-        android:textAlignment="viewEnd"
-
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:padding="5dp"
@@ -32,17 +30,15 @@
     <TextView
         android:id="@+id/time_tw"
         android:text="time"
-        android:textAlignment="viewEnd"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:padding="5dp"
         android:textSize="18sp"
         android:layout_below="@+id/name_tw"
-       />
+        />
 
     <TextView
         android:text="text"
-        android:textAlignment="viewEnd"
         android:layout_below="@+id/time_tw"
         android:id="@+id/text_tw"
         android:layout_width="match_parent"
@@ -50,7 +46,8 @@
         android:padding="5dp"
         android:textSize="18sp"
 
-         />
+        />
+
 
 
 </RelativeLayout>

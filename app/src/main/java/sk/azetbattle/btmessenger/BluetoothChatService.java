@@ -30,7 +30,6 @@ import android.os.IBinder;
 import android.os.Message;
 import android.os.Messenger;
 import android.os.RemoteException;
-import android.provider.SyncStateContract;
 import android.util.Log;
 import android.widget.Toast;
 
@@ -38,6 +37,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.UUID;
+
+import io.realm.Realm;
+import io.realm.RealmConfiguration;
 
 /**
  * This class does all the work for setting up and managing Bluetooth
@@ -72,6 +74,11 @@ public class BluetoothChatService extends Service {
     private ConnectedThread mConnectedThread;
     private int mState;
 
+    User sender;
+    User myself;
+    RealmConfiguration realmConfig;
+    // Get a Realm instance for this thread
+    Realm realm;
     // Constants that indicate the current connection state
     public static final int STATE_NONE = 0;       // we're doing nothing
     public static final int STATE_LISTEN = 1;     // now listening for incoming connections
@@ -93,6 +100,11 @@ public class BluetoothChatService extends Service {
         mAdapter = BluetoothAdapter.getDefaultAdapter();
         mState = STATE_NONE;
         thisService = this;
+
+
+        myself = new User();
+        myself.setName(android.os.Build.MODEL);
+
     }
 
     /**
@@ -158,6 +170,9 @@ public class BluetoothChatService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+
+        realmConfig = new RealmConfiguration.Builder(getBaseContext()).build();
+        realm = Realm.getInstance(realmConfig);
         start();
         return super.onStartCommand(intent, flags, startId);
     }
@@ -233,6 +248,7 @@ public class BluetoothChatService extends Service {
         message.what = Constants.MESSAGE_DEVICE_NAME;
         Bundle bundle = new Bundle();
         bundle.putString(Constants.DEVICE_NAME, device.getName());
+        bundle.putString(Constants.DEVICE_MAC,device.getAddress());
         message.setData(bundle);
         try {
             replyMessanger.send(message);
@@ -506,11 +522,14 @@ public class BluetoothChatService extends Service {
         private final InputStream mmInStream;
         private final OutputStream mmOutStream;
 
+
         public ConnectedThread(BluetoothSocket socket, String socketType) {
             Log.d(TAG, "create ConnectedThread: " + socketType);
             mmSocket = socket;
             InputStream tmpIn = null;
             OutputStream tmpOut = null;
+//            realmConfig = new RealmConfiguration.Builder(getBaseContext()).build();
+//            realm = Realm.getInstance(realmConfig);
 
             // Get the BluetoothSocket input and output streams
             try {
@@ -529,7 +548,7 @@ public class BluetoothChatService extends Service {
             Log.i(TAG, "BEGIN mConnectedThread");
             byte[] buffer = new byte[1024];
             int bytes;
-
+          Realm  realmThread = Realm.getInstance(realmConfig);
             // Keep listening to the InputStream while connected
             while (mState == STATE_CONNECTED) {
                 try {
@@ -540,9 +559,26 @@ public class BluetoothChatService extends Service {
                     Message msg = new Message();
                     msg.what = Constants.MESSAGE_READ;
                     msg.arg1 = bytes;
-                    msg.obj = buffer;
+
+                    sk.azetbattle.btmessenger.Message dbMessage = new sk.azetbattle.btmessenger.Message();
+
+                    User sender = new User();
+                    sender.setName(mmSocket.getRemoteDevice().getName());
+                    dbMessage.setReceiver(myself);
+                    dbMessage.setText(new String(buffer));
+                    dbMessage.setSender(sender);
+                    dbMessage.setTime(System.currentTimeMillis());
+                    dbMessage.setMac(mmSocket.getRemoteDevice().getAddress());
+                    msg.obj = dbMessage.getTime();
+
+
+                    realmThread.beginTransaction();
+                    realmThread.copyToRealm(dbMessage);
+                    realmThread.commitTransaction();
+
                     try {
                         replyMessanger.send(msg);
+
                     } catch (RemoteException e) {
                         e.printStackTrace();
                     }
@@ -563,6 +599,8 @@ public class BluetoothChatService extends Service {
          *
          * @param buffer The bytes to write
          */
+
+
         public void write(byte[] buffer) {
             try {
                 mmOutStream.write(buffer);
@@ -570,7 +608,21 @@ public class BluetoothChatService extends Service {
                 // Share the sent message back to the UI Activit
                 Message message = new Message();
                 message.what = Constants.MESSAGE_WRITE;
-                message.obj = buffer;
+
+
+                sk.azetbattle.btmessenger.Message dbMessage = new sk.azetbattle.btmessenger.Message();
+
+                User sender = new User();
+                sender.setName(mmSocket.getRemoteDevice().getName());
+                dbMessage.setText(new String(buffer));
+                dbMessage.setSender(myself);
+                dbMessage.setReceiver(sender);
+                dbMessage.setMac(mmSocket.getRemoteDevice().getAddress());
+                dbMessage.setTime(System.currentTimeMillis());
+                realm.beginTransaction();
+                realm.copyToRealm(dbMessage);
+                realm.commitTransaction();
+                message.obj = dbMessage.getTime();
                 replyMessanger.send(message);
 
 //                new Handler().obtainMessage(Constants.MESSAGE_WRITE, -1, -1, buffer)

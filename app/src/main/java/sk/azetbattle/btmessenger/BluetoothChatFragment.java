@@ -35,8 +35,12 @@ import android.os.Message;
 
 import android.os.Messenger;
 import android.os.RemoteException;
+import android.provider.Settings;
 import android.provider.SyncStateContract;
+import android.support.v7.widget.LinearLayoutManager;
+import android.support.v7.widget.RecyclerView;
 import android.util.Log;
+import android.util.Range;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.Menu;
@@ -52,6 +56,14 @@ import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.util.ArrayList;
+import java.util.Random;
+import java.util.Set;
+
+import io.realm.Realm;
+import io.realm.RealmConfiguration;
+import io.realm.RealmResults;
+
 /**
  * This fragment controls Bluetooth to communicate with other devices.
  */
@@ -60,13 +72,17 @@ public class BluetoothChatFragment extends Fragment {
     private static final String TAG = "BluetoothChatFragment";
 
     Messenger msgService;
+
+    RealmConfiguration realmConfig;
+    // Get a Realm instance for this thread
+    Realm realm;
     // Intent request codes
     private static final int REQUEST_CONNECT_DEVICE_SECURE = 1;
     private static final int REQUEST_CONNECT_DEVICE_INSECURE = 2;
     private static final int REQUEST_ENABLE_BT = 3;
 
     // Layout Views
-    private ListView mConversationView;
+    private RecyclerView mConversationView;
     private EditText mOutEditText;
     private Button mSendButton;
 
@@ -79,6 +95,8 @@ public class BluetoothChatFragment extends Fragment {
      * Array adapter for the conversation thread
      */
     private ArrayAdapter<String> mConversationArrayAdapter;
+    private MyAdapter myAdapter;
+    private ArrayList<sk.azetbattle.btmessenger.Message> adapterMesseges= new ArrayList<sk.azetbattle.btmessenger.Message>();
 
     /**
      * String buffer for outgoing messages
@@ -99,7 +117,11 @@ public class BluetoothChatFragment extends Fragment {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        realmConfig = new RealmConfiguration.Builder(getActivity().getApplicationContext()).build();
+        realm = Realm.getInstance(realmConfig);
+
         setHasOptionsMenu(true);
+
 
         // Get local Bluetooth adapter
         mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
@@ -119,14 +141,17 @@ public class BluetoothChatFragment extends Fragment {
     }
 
     @Override
-    public void onActivityCreated( Bundle savedInstanceState) {
+    public void onActivityCreated(Bundle savedInstanceState) {
         super.onActivityCreated(savedInstanceState);
+
+
+
 
         if (mBluetoothAdapter == null) {
             Activity activity = getActivity();
             Toast.makeText(activity, "Bluetooth is not available", Toast.LENGTH_LONG).show();
             activity.finish();
-        }else {
+        } else {
             if (!mBluetoothAdapter.isEnabled()) {
                 Intent enableIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
                 startActivityForResult(enableIntent, REQUEST_ENABLE_BT);
@@ -134,13 +159,10 @@ public class BluetoothChatFragment extends Fragment {
             } else if (mChatService == null) {
 
 
-
                 Intent intent = new Intent(getActivity(), BluetoothChatService.class);
 
                 getActivity().startService(intent);
                 getActivity().bindService(intent, mConnection, Context.BIND_AUTO_CREATE);
-
-
 
 
                 setupChat();
@@ -153,7 +175,7 @@ public class BluetoothChatFragment extends Fragment {
         super.onDestroy();
         if (mBound) {
             getActivity().unbindService(mConnection);
-            getActivity().stopService(new Intent(getActivity(),BluetoothChatService.class));
+            getActivity().stopService(new Intent(getActivity(), BluetoothChatService.class));
             mBound = false;
         }
     }
@@ -176,15 +198,23 @@ public class BluetoothChatFragment extends Fragment {
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
-                              Bundle savedInstanceState) {
-        return inflater.inflate(R.layout.fragment_bluetooth_chat, container, false);
+                             Bundle savedInstanceState) {
+        myAdapter = new MyAdapter(adapterMesseges);
+        View view = inflater.inflate(R.layout.fragment_bluetooth_chat, container, false);
+        mConversationView = (RecyclerView) view.findViewById(R.id.in);
+        mConversationView.setHasFixedSize(true);
+        mConversationView.setAdapter(myAdapter);
+        mOutEditText = (EditText) view.findViewById(R.id.edit_text_out);
+        mSendButton = (Button) view.findViewById(R.id.button_send);
+        LinearLayoutManager layoutManager = new LinearLayoutManager(getActivity());
+        mConversationView.setLayoutManager(layoutManager);
+        return view;
     }
 
     @Override
-    public void onViewCreated(View view,  Bundle savedInstanceState) {
-        mConversationView = (ListView) view.findViewById(R.id.in);
-        mOutEditText = (EditText) view.findViewById(R.id.edit_text_out);
-        mSendButton = (Button) view.findViewById(R.id.button_send);
+    public void onViewCreated(View view, Bundle savedInstanceState) {
+
+
     }
 
     /**
@@ -193,9 +223,9 @@ public class BluetoothChatFragment extends Fragment {
     private void setupChat() {
 
         // Initialize the array adapter for the conversation thread
-        mConversationArrayAdapter = new ArrayAdapter<String>(getActivity(), R.layout.message);
+     //   mConversationArrayAdapter = new ArrayAdapter<String>(getActivity(), R.layout.message);
 
-        mConversationView.setAdapter(mConversationArrayAdapter);
+       // mConversationView.setAdapter(mConversationArrayAdapter);
 
         // Initialize the compose field with a listener for the return key
         mOutEditText.setOnEditorActionListener(mWriteListener);
@@ -214,7 +244,6 @@ public class BluetoothChatFragment extends Fragment {
         });
 
         // Initialize the BluetoothChatService to perform bluetooth connections
-
 
 
         // Initialize the buffer for outgoing messages
@@ -367,9 +396,9 @@ public class BluetoothChatFragment extends Fragment {
 
     @Override
     public void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
-       menu.clear();
+        menu.clear();
         inflater.inflate(R.menu.bluetooth_chat, menu);
-        super.onCreateOptionsMenu(menu,inflater);
+        super.onCreateOptionsMenu(menu, inflater);
     }
 
     @Override
@@ -392,10 +421,10 @@ public class BluetoothChatFragment extends Fragment {
                 ensureDiscoverable();
                 return true;
             }
-            case R.id.disconnect:{
+            case R.id.disconnect: {
 
-                if(mChatService!=null){
-                    mChatService.stopService(new Intent(getActivity(),BluetoothChatService.class));
+                if (mChatService != null) {
+                    mChatService.stopService(new Intent(getActivity(), BluetoothChatService.class));
                 }
                 return true;
             }
@@ -421,6 +450,7 @@ public class BluetoothChatFragment extends Fragment {
             }
         }
     }
+
     Messenger replyMessenger = new Messenger(new Handler() {
         @Override
         public void handleMessage(Message msg) {
@@ -428,13 +458,14 @@ public class BluetoothChatFragment extends Fragment {
             switch (msg.what) {
                 case Constants.INITMESSAGE:
                     mChatService = (BluetoothChatService) msg.obj;
-                    Log.v(TAG,mChatService.toString());
+                    Log.v(TAG, mChatService.toString());
+
                     break;
                 case Constants.MESSAGE_STATE_CHANGE:
                     switch (msg.arg1) {
                         case BluetoothChatService.STATE_CONNECTED:
                             setStatus(getString(R.string.title_connected_to, mConnectedDeviceName));
-                            mConversationArrayAdapter.clear();
+                         //   mConversationArrayAdapter.clear();
                             break;
                         case BluetoothChatService.STATE_CONNECTING:
                             setStatus(R.string.title_connecting);
@@ -446,20 +477,65 @@ public class BluetoothChatFragment extends Fragment {
                     }
                     break;
                 case Constants.MESSAGE_WRITE:
-                    byte[] writeBuf = (byte[]) msg.obj;
                     // construct a string from the buffer
-                    String writeMessage = new String(writeBuf);
-                    mConversationArrayAdapter.add("Me:  " + writeMessage);
+//                    String writeMessage = new String(writeBuf);
+                    long time = (long) msg.obj;
+                    sk.azetbattle.btmessenger.Message mes = realm.where(sk.azetbattle.btmessenger.Message.class)
+                            .equalTo("time",time).findFirst();
+
+
+                   // mConversationArrayAdapter.add("Me:  " + writeMessage);
+                    adapterMesseges.add(mes);
+                    myAdapter.notifyDataSetChanged();
+                    getActivity().runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            mConversationView.smoothScrollToPosition(myAdapter.getItemCount()-1);
+                        }
+                    });
                     break;
                 case Constants.MESSAGE_READ:
-                    byte[] readBuf = (byte[]) msg.obj;
-                    // construct a string from the valid bytes in the buffer
-                    String readMessage = new String(readBuf, 0, msg.arg1);
-                    mConversationArrayAdapter.add(mConnectedDeviceName + ":  " + readMessage);
+                    time = (long) msg.obj;
+                    mes = realm.where(sk.azetbattle.btmessenger.Message.class)
+                            .equalTo("time",time).findFirst();
+                    // mConversationArrayAdapter.add("Me:  " + writeMessage);
+                    adapterMesseges.add(mes);
+
+                    myAdapter.notifyDataSetChanged();
+                    getActivity().runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            mConversationView.smoothScrollToPosition(myAdapter.getItemCount()-1);
+                        }
+                    });
+//                    final byte[] readBuf = (byte[]) msg.obj;
+//                    // construct a string from the valid bytes in the buffer
+//                    String readMessage = new String(readBuf, 0, msg.arg1);
+                  //  mConversationArrayAdapter.add(mConnectedDeviceName + ":  " + readMessage);
                     break;
                 case Constants.MESSAGE_DEVICE_NAME:
+
                     // save the connected device's name
                     mConnectedDeviceName = msg.getData().getString(Constants.DEVICE_NAME);
+                    String mConnectedDeviceMac = msg.getData().getString(Constants.DEVICE_MAC);
+                    User connected = new User();
+                    connected.setName(mConnectedDeviceName);
+                    RealmResults<sk.azetbattle.btmessenger.Message> messagesList = realm.where(sk.azetbattle.btmessenger.Message.class)
+                            .equalTo("mac", mConnectedDeviceMac).findAll();
+                    adapterMesseges.addAll(messagesList);
+                    myAdapter.notifyDataSetChanged();
+                    getActivity().runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            mConversationView.scrollToPosition(myAdapter.getItemCount()-1);
+                        }
+                    });
+//                    mConversationArrayAdapter.clear();
+//                    for (sk.azetbattle.btmessenger.Message mess :
+//                            messages) {
+//                        mConversationArrayAdapter.add("Sender:"+ mess.getSender() +"\n\t" +mess.getText()+"Time:" + mess.getTime() );
+//                    }
+
                     if (null != activity) {
                         Toast.makeText(activity, "Connected to "
                                 + mConnectedDeviceName, Toast.LENGTH_SHORT).show();
@@ -475,7 +551,10 @@ public class BluetoothChatFragment extends Fragment {
         }
     });
 
-
+    private int getConversationKey(long seed) {
+        Random rnd = new Random(seed);
+        return rnd.nextInt();
+    }
 
     boolean mBound = false;
 
@@ -485,7 +564,7 @@ public class BluetoothChatFragment extends Fragment {
         public void onServiceConnected(ComponentName className,
                                        IBinder service) {
             // We've bound to LocalService, cast the IBinder and get LocalService instance
-         //   BluetoothChatService.LocalBinder binder = (BluetoothChatService.LocalBinder) service;
+            //   BluetoothChatService.LocalBinder binder = (BluetoothChatService.LocalBinder) service;
 
             msgService = new Messenger(service);
             mBound = true;
