@@ -59,7 +59,7 @@ public class BluetoothChatService extends Service {
 
     // Unique UUID for this application
     private static final UUID MY_UUID_SECURE =
-            UUID.fromString("599e1003-1b39-432a-93db-a4d94ea17f54");
+            UUID.fromString("0a84dc3c-2be4-4533-b0d2-a806c26776dc");
     private static final UUID MY_UUID_INSECURE =
             UUID.fromString("8ce255c0-200a-11e0-ac64-0800200c9a66");
 
@@ -108,7 +108,9 @@ public class BluetoothChatService extends Service {
         message.what = Constants.MESSAGE_STATE_CHANGE;
         message.arg1 = state;
         try {
-            replyMessanger.send(message);
+            if (replyMessanger != null) {
+                replyMessanger.send(message);
+            }
         } catch (RemoteException e) {
             e.printStackTrace();
         }
@@ -140,7 +142,7 @@ public class BluetoothChatService extends Service {
             mConnectedThread = null;
         }
 
-
+        setState(STATE_LISTEN);
 
         // Start the thread to listen on a BluetoothServerSocket
         if (mSecureAcceptThread == null) {
@@ -188,6 +190,7 @@ public class BluetoothChatService extends Service {
         setState(STATE_CONNECTING);
     }
 
+
     /**
      * Start the ConnectedThread to begin managing a Bluetooth connection
      *
@@ -218,7 +221,7 @@ public class BluetoothChatService extends Service {
             mInsecureAcceptThread.cancel();
             mInsecureAcceptThread = null;
         }
-
+        setState(STATE_LISTEN);
         // Start the thread to manage the connection and perform transmissions
         mConnectedThread = new ConnectedThread(socket, socketType);
         mConnectedThread.start();
@@ -374,7 +377,8 @@ public class BluetoothChatService extends Service {
             while (mState != STATE_CONNECTED) {
                 try {
                     // This is a blocking call and will only return on a
-                    // successful connection or an exception
+                    // successful connection or an
+
                     socket = mmServerSocket.accept();
                 } catch (IOException e) {
                     Log.e(TAG, "Socket Type: " + mSocketType + "accept() failed", e);
@@ -510,6 +514,7 @@ public class BluetoothChatService extends Service {
 
             // Get the BluetoothSocket input and output streams
             try {
+                mState = STATE_CONNECTED;
                 tmpIn = socket.getInputStream();
                 tmpOut = socket.getOutputStream();
             } catch (IOException e) {
@@ -534,8 +539,14 @@ public class BluetoothChatService extends Service {
                     // Send the obtained bytes to the UI Activity
                     Message msg = new Message();
                     msg.what = Constants.MESSAGE_READ;
-                    msg.obj=buffer;
-//                    new Handler().obtainMessage(Constants.MESSAGE_READ, bytes, -1, buffer)
+                    msg.arg1 = bytes;
+                    msg.obj = buffer;
+                    try {
+                        replyMessanger.send(msg);
+                    } catch (RemoteException e) {
+                        e.printStackTrace();
+                    }
+                    //   new Handler().obtainMessage(Constants.MESSAGE_READ, bytes, -1, buffer)
 //                            .sendToTarget();
                 } catch (IOException e) {
                     Log.e(TAG, "disconnected", e);
@@ -605,6 +616,7 @@ public class BluetoothChatService extends Service {
             }
         }
     }
+
     Messenger messenger = new Messenger(new IncomingHandler());
 
     public class LocalBinder extends Binder {

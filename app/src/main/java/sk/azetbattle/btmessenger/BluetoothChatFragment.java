@@ -153,6 +153,7 @@ public class BluetoothChatFragment extends Fragment {
         super.onDestroy();
         if (mBound) {
             getActivity().unbindService(mConnection);
+            getActivity().stopService(new Intent(getActivity(),BluetoothChatService.class));
             mBound = false;
         }
     }
@@ -389,6 +390,13 @@ public class BluetoothChatFragment extends Fragment {
             case R.id.discoverable: {
                 // Ensure this device is discoverable by others
                 ensureDiscoverable();
+                return true;
+            }
+            case R.id.disconnect:{
+
+                if(mChatService!=null){
+                    mChatService.stopService(new Intent(getActivity(),BluetoothChatService.class));
+                }
                 return true;
             }
         }
