@@ -28,6 +28,9 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Message;
+import android.os.Messenger;
+import android.os.RemoteException;
+import android.provider.SyncStateContract;
 import android.util.Log;
 import android.widget.Toast;
 
@@ -45,7 +48,7 @@ import java.util.UUID;
 public class BluetoothChatService extends Service {
     // Debugging
     private static final String TAG = "BluetoothChatService";
-    public static final int INITMESSAGE = 6;
+
 
     // Binder given to clients
     private final IBinder mBinder = new LocalBinder();
@@ -100,7 +103,15 @@ public class BluetoothChatService extends Service {
         mState = state;
 
         // Give the new state to the Handler so the UI Activity can update
-        mHandler.obtainMessage(Constants.MESSAGE_STATE_CHANGE, state, -1).sendToTarget();
+        Message message = new Message();
+        message.what = Constants.MESSAGE_STATE_CHANGE;
+        message.arg1 = state;
+        try {
+            replyMessanger.send(message);
+        } catch (RemoteException e) {
+            e.printStackTrace();
+        }
+//        mHandler.obtainMessage(Constants.MESSAGE_STATE_CHANGE, state, -1).sendToTarget();
     }
 
     /**
@@ -128,7 +139,7 @@ public class BluetoothChatService extends Service {
             mConnectedThread = null;
         }
 
-        setState(STATE_LISTEN);
+       // setState(STATE_LISTEN);
 
         // Start the thread to listen on a BluetoothServerSocket
         if (mSecureAcceptThread == null) {
@@ -212,11 +223,19 @@ public class BluetoothChatService extends Service {
         mConnectedThread.start();
 
         // Send the name of the connected device back to the UI Activity
-        Message msg = mHandler.obtainMessage(Constants.MESSAGE_DEVICE_NAME);
+
+//        Message msg = new Handler().obtainMessage(Constants.MESSAGE_DEVICE_NAME);
+        Message message = new Message();
+        message.what = Constants.MESSAGE_DEVICE_NAME;
         Bundle bundle = new Bundle();
         bundle.putString(Constants.DEVICE_NAME, device.getName());
-        msg.setData(bundle);
-        mHandler.sendMessage(msg);
+        message.setData(bundle);
+        try {
+            replyMessanger.send(message);
+        } catch (RemoteException e) {
+            e.printStackTrace();
+        }
+//        mHandler.sendMessage(msg);
 
         setState(STATE_CONNECTED);
     }
@@ -274,11 +293,17 @@ public class BluetoothChatService extends Service {
      */
     private void connectionFailed() {
         // Send a failure message back to the Activity
-        Message msg = mHandler.obtainMessage(Constants.MESSAGE_TOAST);
+
+        Message msg = new Message();
+        msg.what = Constants.MESSAGE_TOAST;
         Bundle bundle = new Bundle();
         bundle.putString(Constants.TOAST, "Unable to connect device");
         msg.setData(bundle);
-        mHandler.sendMessage(msg);
+        try {
+            replyMessanger.send(msg);
+        } catch (RemoteException e) {
+            e.printStackTrace();
+        }
 
         // Start the service over to restart listening mode
         BluetoothChatService.this.start();
@@ -290,11 +315,16 @@ public class BluetoothChatService extends Service {
      */
     private void connectionLost() {
         // Send a failure message back to the Activity
-        Message msg = mHandler.obtainMessage(Constants.MESSAGE_TOAST);
+        Message msg = new Message();
+        msg.what = Constants.MESSAGE_TOAST;
         Bundle bundle = new Bundle();
         bundle.putString(Constants.TOAST, "Device connection was lost");
         msg.setData(bundle);
-        mHandler.sendMessage(msg);
+        try {
+            replyMessanger.send(msg);
+        } catch (RemoteException e) {
+            e.printStackTrace();
+        }
 
         // Start the service over to restart listening mode
         BluetoothChatService.this.start();
@@ -501,8 +531,11 @@ public class BluetoothChatService extends Service {
                     bytes = mmInStream.read(buffer);
 
                     // Send the obtained bytes to the UI Activity
-                    mHandler.obtainMessage(Constants.MESSAGE_READ, bytes, -1, buffer)
-                            .sendToTarget();
+                    Message msg = new Message();
+                    msg.what = Constants.MESSAGE_READ;
+                    msg.obj=buffer;
+//                    new Handler().obtainMessage(Constants.MESSAGE_READ, bytes, -1, buffer)
+//                            .sendToTarget();
                 } catch (IOException e) {
                     Log.e(TAG, "disconnected", e);
                     connectionLost();
@@ -522,11 +555,18 @@ public class BluetoothChatService extends Service {
             try {
                 mmOutStream.write(buffer);
 
-                // Share the sent message back to the UI Activity
-                mHandler.obtainMessage(Constants.MESSAGE_WRITE, -1, -1, buffer)
-                        .sendToTarget();
+                // Share the sent message back to the UI Activit
+                Message message = new Message();
+                message.what = Constants.MESSAGE_WRITE;
+                message.obj = buffer;
+                replyMessanger.send(message);
+
+//                new Handler().obtainMessage(Constants.MESSAGE_WRITE, -1, -1, buffer)
+//                        .sendToTarget();
             } catch (IOException e) {
                 Log.e(TAG, "Exception during write", e);
+            } catch (RemoteException e) {
+                e.printStackTrace();
             }
         }
 
@@ -539,24 +579,34 @@ public class BluetoothChatService extends Service {
         }
     }
 
+    Messenger replyMessanger;
+
     class IncomingHandler extends Handler {
 
         @Override
         public void handleMessage(Message msg) {
 
-            if (msg.what == INITMESSAGE) {
+            if (msg.what == Constants.INITMESSAGE) {
                 Bundle bundle = msg.getData();
-                Toast.makeText(bundle.getString("rec")).show();//message received
+                Toast.makeText(getApplication(), bundle.getString("rec"), Toast.LENGTH_LONG).show();//message received
+
                 replyMessanger = msg.replyTo; //init reply messenger
-                doSomething();
+                msg.obj = this;
+                msg.what = Constants.INITMESSAGE;
+                try {
+                    replyMessanger.send(msg);
+                } catch (RemoteException e) {
+                    e.printStackTrace();
+                }
             }
         }
     }
+    Messenger messenger = new Messenger(new IncomingHandler());
 
     public class LocalBinder extends Binder {
-        public BluetoothChatService getService() {
+        public IBinder getService() {
             // Return this instance of LocalService so clients can call public methods
-            return BluetoothChatService.this;
+            return messenger.getBinder();
         }
     }
 }

@@ -35,6 +35,7 @@ import android.os.Message;
 
 import android.os.Messenger;
 import android.os.RemoteException;
+import android.provider.SyncStateContract;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.Menu;
@@ -136,7 +137,11 @@ public class BluetoothChatFragment extends Fragment {
                 Intent intent = new Intent(getActivity(), BluetoothChatService.class);
 
                 getActivity().startService(intent);
+
+                sendInitMessage(getView());
+
                 getActivity().bindService(intent, mConnection, Context.BIND_AUTO_CREATE);
+
                 setupChat();
             }
         }
@@ -393,7 +398,7 @@ public class BluetoothChatFragment extends Fragment {
     public void sendInitMessage(View view) {
         if (mBound) {
             try {
-                Message message = Message.obtain(null, BluetoothChatService.INITMESSAGE, 1, 1);
+                Message message = Message.obtain(null, Constants.INITMESSAGE, 1, 1);
                 message.replyTo = replyMessenger;
 
                 Bundle bundle = new Bundle();
@@ -412,6 +417,9 @@ public class BluetoothChatFragment extends Fragment {
         public void handleMessage(Message msg) {
             Activity activity = getActivity();
             switch (msg.what) {
+                case Constants.INITMESSAGE:
+                    mChatService = (BluetoothChatService) msg.obj;
+                    break;
                 case Constants.MESSAGE_STATE_CHANGE:
                     switch (msg.arg1) {
                         case BluetoothChatService.STATE_CONNECTED:
@@ -468,9 +476,10 @@ public class BluetoothChatFragment extends Fragment {
                                        IBinder service) {
             // We've bound to LocalService, cast the IBinder and get LocalService instance
             BluetoothChatService.LocalBinder binder = (BluetoothChatService.LocalBinder) service;
+
             msgService = new Messenger(service);
 
-            mChatService = binder.getService();
+//            mChatService = binder.getService();
             mBound = true;
         }
 
