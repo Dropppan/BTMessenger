@@ -1,0 +1,11 @@
+<resources>
+
+    <!-- Base application theme. -->
+    <!-- Activity themes -->
+
+    <style name="AppTheme" parent="@android:style/Theme.Material.Light" />
+    <!-- Widget styling -->
+
+
+
+</resources>
